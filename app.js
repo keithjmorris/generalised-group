@@ -154,21 +154,32 @@ changeNumberBtn.addEventListener("click", () => {
 });
 
 saveNameBtn.addEventListener("click", async () => {
+  if (!pendingUser) return; // already submitted - ignore a second click
   const name = displayNameEl.value.trim();
   if (!name) {
     signinError.textContent = "Enter a name so other members recognize you.";
     return;
   }
-  await setDoc(doc(db, "members", pendingUser.uid), {
-    name,
-    phoneNumber: pendingUser.phoneNumber || "",
-    role: "",
-    memberSince: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  currentMemberProfile = { name, photoURL: "" };
-  pendingUser = null;
-  enterApp();
+  saveNameBtn.disabled = true;
+  const uid = pendingUser.uid;
+  const phoneNumber = pendingUser.phoneNumber || "";
+  pendingUser = null; // claim it immediately so a second click is a no-op
+  try {
+    await setDoc(doc(db, "members", uid), {
+      name,
+      phoneNumber,
+      role: "",
+      memberSince: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    currentMemberProfile = { name, photoURL: "" };
+    enterApp();
+  } catch (err) {
+    console.error(err);
+    signinError.textContent = "Something went wrong saving your name. Please try again.";
+    pendingUser = currentUser; // let them retry
+    saveNameBtn.disabled = false;
+  }
 });
 
 signOutBtn.addEventListener("click", () => signOut(auth));
@@ -285,7 +296,7 @@ function renderEvents() {
     return;
   }
   allEvents.forEach((e) => {
-    const d = e.date ? e.date.toDate() : null;
+    const d = e.date && typeof e.date.toDate === "function" ? e.date.toDate() : null;
     const card = document.createElement("div");
     card.className = "event-card";
     card.innerHTML = `
@@ -305,7 +316,7 @@ function renderEvents() {
 
 function openEventDetail(e) {
   activeEvent = e;
-  const d = e.date ? e.date.toDate() : null;
+  const d = e.date && typeof e.date.toDate === "function" ? e.date.toDate() : null;
   eventDetailTitleEl.textContent = e.title;
   eventDetailMetaEl.textContent = `${d ? d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ""}${e.location ? ", " + e.location : ""}`;
 
