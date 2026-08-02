@@ -118,7 +118,10 @@ sendCodeBtn.addEventListener("click", async () => {
   } catch (err) {
     console.error(err);
     signinError.textContent = "Couldn't send a code to that number. Check the format and try again.";
-    recaptchaVerifier = null; // recaptcha tokens are single-use - rebuild on retry
+    if (recaptchaVerifier) {
+      recaptchaVerifier.clear(); // removes the rendered widget, not just our reference to it
+      recaptchaVerifier = null;
+    }
   } finally {
     sendCodeBtn.disabled = false;
   }
