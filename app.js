@@ -89,6 +89,7 @@ COUNTRY_CODES.forEach(({ code, label }) => {
 let confirmationResult = null;
 let recaptchaVerifier = null;
 let pendingUser = null; // holds the signed-in user while we wait for their name (first-time sign-in)
+let memberProfileConfirmed = false; // true once we've saved/found this session's member doc - stops a late duplicate auth event from bouncing us back to the name step
 
 function getRecaptcha() {
   if (!recaptchaVerifier) {
@@ -173,6 +174,7 @@ saveNameBtn.addEventListener("click", async () => {
       updatedAt: serverTimestamp(),
     });
     currentMemberProfile = { name, photoURL: "" };
+    memberProfileConfirmed = true;
     enterApp();
   } catch (err) {
     console.error(err);
@@ -187,6 +189,7 @@ signOutBtn.addEventListener("click", () => signOut(auth));
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   if (!user) {
+    memberProfileConfirmed = false;
     signedOutEl.hidden = false;
     appEl.hidden = true;
     phoneStepEl.hidden = false;
@@ -197,12 +200,20 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
+  if (memberProfileConfirmed) {
+    // We've already saved/found this session's member doc - a late duplicate
+    // auth event shouldn't re-derive (and potentially undo) that.
+    enterApp();
+    return;
+  }
+
   const memberRef = doc(db, "members", user.uid);
   const existing = await getDoc(memberRef);
 
   if (existing.exists() && existing.data().name) {
     // Returning member - just refresh their last-seen time and go straight in.
     currentMemberProfile = { name: existing.data().name, photoURL: existing.data().photoURL || "" };
+    memberProfileConfirmed = true;
     await setDoc(memberRef, { updatedAt: serverTimestamp() }, { merge: true });
     enterApp();
   } else {
