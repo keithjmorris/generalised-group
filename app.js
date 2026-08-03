@@ -112,6 +112,13 @@ sendCodeBtn.addEventListener("click", async () => {
   sendCodeBtn.disabled = true;
   try {
     confirmationResult = await signInWithPhoneNumber(auth, fullNumber, getRecaptcha());
+    // The widget isn't needed again until a resend - clear it now so it
+    // can't linger on the page (a visible challenge, in particular, can
+    // otherwise sit on top of the Verify button and swallow clicks).
+    if (recaptchaVerifier) {
+      recaptchaVerifier.clear();
+      recaptchaVerifier = null;
+    }
     codeSentToEl.textContent = fullNumber;
     phoneStepEl.hidden = true;
     codeStepEl.hidden = false;
