@@ -148,7 +148,7 @@ verifyCodeBtn.addEventListener("click", async () => {
     // onAuthStateChanged below takes it from here
   } catch (err) {
     console.error(err);
-    signinError.textContent = "That code didn't match. Please try again.";
+    signinError.textContent = `That code didn't match. Please try again. (${err.code || "unknown error"})`;
   } finally {
     verifyCodeBtn.disabled = false;
   }
