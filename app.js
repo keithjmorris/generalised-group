@@ -108,6 +108,14 @@ sendCodeBtn.addEventListener("click", async () => {
   // a full number the member has typed themselves starting with "+".
   const fullNumber = raw.startsWith("+") ? raw.replace(/\s+/g, "") : `${countryCodeEl.value}${raw.replace(/\D/g, "")}`;
 
+  // Always start from a clean reCAPTCHA - reusing one across attempts can
+  // hand back an already-stale verification session, which shows up as
+  // "code expired" even when the code is entered within seconds.
+  if (recaptchaVerifier) {
+    recaptchaVerifier.clear();
+    recaptchaVerifier = null;
+  }
+
   sendCodeBtn.disabled = true;
   try {
     confirmationResult = await signInWithPhoneNumber(auth, fullNumber, getRecaptcha());
