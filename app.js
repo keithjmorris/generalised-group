@@ -93,7 +93,16 @@ let memberProfileConfirmed = false; // true once we've saved/found this session'
 
 function getRecaptcha() {
   if (!recaptchaVerifier) {
-    recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+    // Build a brand-new container each time rather than reusing the same
+    // div - reusing one can leave Google's widget library thinking it's
+    // "already rendered" even after calling .clear(), which silently
+    // blocks everything downstream (the SMS never even gets requested).
+    const parent = document.getElementById("recaptcha-container");
+    parent.innerHTML = "";
+    const freshDiv = document.createElement("div");
+    freshDiv.id = `recaptcha-widget-${Date.now()}`;
+    parent.appendChild(freshDiv);
+    recaptchaVerifier = new RecaptchaVerifier(auth, freshDiv.id, { size: "invisible" });
   }
   return recaptchaVerifier;
 }
