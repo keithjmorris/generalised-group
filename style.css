@@ -1,5 +1,11 @@
 * { box-sizing: border-box; }
 
+/* The hidden attribute must always win, even on elements that also set
+   their own display value (flex, etc.) elsewhere in this file - otherwise
+   sign-in/app screens and the Members/Events/Chat tabs can render on top
+   of each other instead of properly switching. */
+[hidden] { display: none !important; }
+
 :root {
   --wa-header: #075E54;
   --wa-header-light: #128C7E;
