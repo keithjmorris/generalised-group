@@ -359,13 +359,19 @@ button {
   gap: 8px;
   flex-shrink: 0;
 }
-.composer input[type="text"] {
+.composer input[type="text"],
+.composer textarea {
   flex: 1;
   background: #fff;
   border: none;
   border-radius: 18px;
   padding: 9px 14px;
   font-size: 13.5px;
+  font-family: inherit;
+  resize: none;
+  line-height: 1.4;
+  max-height: 120px;
+  overflow-y: auto;
 }
 .composer .attach-btn, .composer .send-btn {
   background: none;

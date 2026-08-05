@@ -586,9 +586,14 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
   attachBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   attachBtn.addEventListener("click", () => fileInput.click());
 
-  const textInput = document.createElement("input");
-  textInput.type = "text";
+  const textInput = document.createElement("textarea");
+  textInput.rows = 1;
   textInput.placeholder = placeholder;
+  const autoGrow = () => {
+    textInput.style.height = "auto";
+    textInput.style.height = `${textInput.scrollHeight}px`;
+  };
+  textInput.addEventListener("input", autoGrow);
 
   const sendBtn = document.createElement("button");
   sendBtn.className = "send-btn";
@@ -609,6 +614,7 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
     const text = textInput.value.trim();
     if (!text) return;
     textInput.value = "";
+    autoGrow();
     await addDoc(collection(db, "messages"), {
       text,
       type: "text",
@@ -622,7 +628,10 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
 
   sendBtn.addEventListener("click", send);
   textInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") send();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
   });
 
   fileInput.addEventListener("change", async () => {
