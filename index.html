@@ -64,6 +64,25 @@
 
     <!-- Events tab -->
     <section id="view-events" class="view" hidden>
+      <div class="events-header">
+        <button id="new-event-btn" class="btn-secondary">+ New event</button>
+      </div>
+      <div id="new-event-form" class="new-event-form" hidden>
+        <input type="text" id="event-title-input" placeholder="Event title" />
+        <input type="datetime-local" id="event-date-input" />
+        <input type="text" id="event-location-input" placeholder="Location" />
+        <textarea id="event-description-input" placeholder="Description (optional)" rows="2"></textarea>
+        <div class="event-attach-row">
+          <button id="event-attach-btn" class="btn-secondary" type="button">Attach poster (image or PDF)</button>
+          <input type="file" id="event-attach-input" accept="image/*,application/pdf" hidden />
+          <span id="event-attach-filename" class="attach-filename"></span>
+        </div>
+        <div class="new-event-actions">
+          <button id="event-cancel-btn" class="btn-link" type="button">Cancel</button>
+          <button id="event-save-btn" class="btn-primary" type="button">Save event</button>
+        </div>
+        <p id="event-form-error" class="error-text"></p>
+      </div>
       <div id="events-list" class="list padded"></div>
     </section>
 
@@ -78,6 +97,7 @@
           <div id="event-detail-meta" class="event-detail-meta"></div>
         </div>
       </div>
+      <div id="event-detail-attachment" class="event-attachment"></div>
       <div id="event-rsvp-row" class="rsvp-row"></div>
       <div class="discussion-label">Discussion</div>
       <div id="event-messages" class="chat-thread"></div>

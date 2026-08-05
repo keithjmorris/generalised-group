@@ -192,6 +192,50 @@ button {
 }
 .list.padded { padding: 12px; gap: 10px; display: flex; flex-direction: column; }
 
+.events-header { padding: 12px 12px 0; flex-shrink: 0; }
+.btn-secondary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.new-event-form {
+  margin: 10px 12px 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.new-event-form input[type="text"],
+.new-event-form input[type="datetime-local"],
+.new-event-form textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  width: 100%;
+}
+.event-attach-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.attach-filename { font-size: 12px; color: var(--text-secondary); }
+.new-event-actions { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 4px; }
+.event-attachment { padding: 0 14px; flex-shrink: 0; }
+.event-attachment img { max-width: 100%; border-radius: 8px; display: block; margin-top: 8px; }
+.event-attachment a.attachment-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .member-row {
   display: flex;
   align-items: center;

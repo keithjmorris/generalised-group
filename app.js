@@ -313,8 +313,120 @@ const eventDetailTitleEl = document.getElementById("event-detail-title");
 const eventDetailMetaEl = document.getElementById("event-detail-meta");
 const rsvpRowEl = document.getElementById("event-rsvp-row");
 const eventMessagesEl = document.getElementById("event-messages");
+const eventAttachmentEl = document.getElementById("event-detail-attachment");
+const newEventBtn = document.getElementById("new-event-btn");
+const newEventFormEl = document.getElementById("new-event-form");
+const eventTitleInput = document.getElementById("event-title-input");
+const eventDateInput = document.getElementById("event-date-input");
+const eventLocationInput = document.getElementById("event-location-input");
+const eventDescriptionInput = document.getElementById("event-description-input");
+const eventAttachBtn = document.getElementById("event-attach-btn");
+const eventAttachInput = document.getElementById("event-attach-input");
+const eventAttachFilenameEl = document.getElementById("event-attach-filename");
+const eventCancelBtn = document.getElementById("event-cancel-btn");
+const eventSaveBtn = document.getElementById("event-save-btn");
+const eventFormErrorEl = document.getElementById("event-form-error");
+let pendingEventAttachment = null; // the File object chosen, if any
 let allEvents = [];
 let activeEvent = null;
+
+function resetNewEventForm() {
+  eventTitleInput.value = "";
+  eventDateInput.value = "";
+  eventLocationInput.value = "";
+  eventDescriptionInput.value = "";
+  eventAttachFilenameEl.textContent = "";
+  eventFormErrorEl.textContent = "";
+  pendingEventAttachment = null;
+  eventSaveBtn.disabled = false;
+  eventSaveBtn.textContent = "Save event";
+}
+
+newEventBtn.addEventListener("click", () => {
+  const opening = newEventFormEl.hidden;
+  newEventFormEl.hidden = !opening;
+  if (opening) resetNewEventForm();
+});
+
+eventCancelBtn.addEventListener("click", () => {
+  newEventFormEl.hidden = true;
+  resetNewEventForm();
+});
+
+eventAttachBtn.addEventListener("click", () => eventAttachInput.click());
+
+eventAttachInput.addEventListener("change", () => {
+  const file = eventAttachInput.files[0];
+  if (!file) return;
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+  if (!isImage && !isPdf) {
+    eventFormErrorEl.textContent = "Please choose an image or PDF file.";
+    eventAttachInput.value = "";
+    return;
+  }
+  if (file.size > 15 * 1024 * 1024) {
+    eventFormErrorEl.textContent = "That file is too large (15MB max).";
+    eventAttachInput.value = "";
+    return;
+  }
+  eventFormErrorEl.textContent = "";
+  pendingEventAttachment = file;
+  eventAttachFilenameEl.textContent = file.name;
+});
+
+eventSaveBtn.addEventListener("click", async () => {
+  eventFormErrorEl.textContent = "";
+  const title = eventTitleInput.value.trim();
+  const location = eventLocationInput.value.trim();
+  const description = eventDescriptionInput.value.trim();
+  if (!title) {
+    eventFormErrorEl.textContent = "Give the event a title.";
+    return;
+  }
+  if (!eventDateInput.value) {
+    eventFormErrorEl.textContent = "Pick a date and time.";
+    return;
+  }
+  const eventDate = new Date(eventDateInput.value);
+
+  eventSaveBtn.disabled = true;
+  eventSaveBtn.textContent = "Saving...";
+  try {
+    let attachmentUrl = null;
+    let attachmentType = null;
+    let attachmentName = null;
+    if (pendingEventAttachment) {
+      const path = `event-media/${currentUser.uid}/${Date.now()}_${pendingEventAttachment.name}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, pendingEventAttachment);
+      attachmentUrl = await getDownloadURL(storageRef);
+      attachmentType = pendingEventAttachment.type.startsWith("image/") ? "image" : "pdf";
+      attachmentName = pendingEventAttachment.name;
+    }
+
+    await addDoc(collection(db, "events"), {
+      title,
+      date: eventDate,
+      location,
+      description,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+      createdBy: currentUser.uid,
+      createdByName: currentMemberProfile.name,
+      createdAt: serverTimestamp(),
+    });
+
+    newEventFormEl.hidden = true;
+    resetNewEventForm();
+  } catch (err) {
+    console.error(err);
+    eventFormErrorEl.textContent = "Something went wrong saving the event. Please try again.";
+    eventSaveBtn.disabled = false;
+    eventSaveBtn.textContent = "Save event";
+  }
+});
 
 function renderEvents() {
   eventsListEl.innerHTML = "";
@@ -346,6 +458,15 @@ function openEventDetail(e) {
   const d = e.date && typeof e.date.toDate === "function" ? e.date.toDate() : null;
   eventDetailTitleEl.textContent = e.title;
   eventDetailMetaEl.textContent = `${d ? d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ""}${e.location ? ", " + e.location : ""}`;
+
+  eventAttachmentEl.innerHTML = "";
+  if (e.attachmentUrl) {
+    if (e.attachmentType === "image") {
+      eventAttachmentEl.innerHTML = `<img src="${e.attachmentUrl}" alt="${escapeHtml(e.attachmentName || "Event attachment")}" />`;
+    } else {
+      eventAttachmentEl.innerHTML = `<a class="attachment-link" href="${e.attachmentUrl}" target="_blank" rel="noopener">View attachment: ${escapeHtml(e.attachmentName || "PDF")}</a>`;
+    }
+  }
 
   rsvpRowEl.innerHTML = "";
   ["going", "maybe", "no"].forEach((status) => {
