@@ -20,6 +20,48 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 
 // ---------------------------------------------------------------------------
+// Group resolution - every URL is /g/{groupId}, and all data for that group
+// lives under groups/{groupId}/... in Firestore and Storage. A person can
+// belong to any number of groups; which one they're using is simply whichever
+// group's URL they're currently on.
+// ---------------------------------------------------------------------------
+const GROUP_ID = (() => {
+  const match = window.location.pathname.match(/\/g\/([^/]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+})();
+
+function groupCollection(name) {
+  return collection(db, "groups", GROUP_ID, name);
+}
+function groupDoc(name, id) {
+  return doc(db, "groups", GROUP_ID, name, id);
+}
+function groupStoragePath(subpath) {
+  return `groups/${GROUP_ID}/${subpath}`;
+}
+
+if (!GROUP_ID) {
+  document.body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;font-family:-apple-system,sans-serif;text-align:center;color:#5b6b73;">
+      <div>
+        <h1 style="color:#111;">No group specified</h1>
+        <p>This link is missing a group - it should look like <code>.../g/your-group-name</code>.<br/>Check the link you were given and try again.</p>
+      </div>
+    </div>`;
+  throw new Error("No group in URL - halting app init");
+}
+
+// Load the group's display name (set once by whoever created the group doc
+// in Firestore console) and apply it wherever the app currently says
+// "CarChat" - falls back to the raw group id if the doc has no name yet.
+getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
+  const groupName = (groupSnap.exists() && groupSnap.data().name) || GROUP_ID;
+  document.title = groupName;
+  const appNameEl = document.getElementById("app-name");
+  if (appNameEl) appNameEl.textContent = groupName;
+});
+
+// ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
 const signedOutEl = document.getElementById("signed-out");
@@ -182,7 +224,7 @@ saveNameBtn.addEventListener("click", async () => {
   const phoneNumber = pendingUser.phoneNumber || "";
   pendingUser = null; // claim it immediately so a second click is a no-op
   try {
-    await setDoc(doc(db, "members", uid), {
+    await setDoc(groupDoc("members", uid), {
       name,
       phoneNumber,
       role: "",
@@ -223,7 +265,7 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  const memberRef = doc(db, "members", user.uid);
+  const memberRef = groupDoc("members", user.uid);
   const existing = await getDoc(memberRef);
 
   if (existing.exists() && existing.data().name) {
@@ -397,7 +439,7 @@ eventSaveBtn.addEventListener("click", async () => {
     let attachmentType = null;
     let attachmentName = null;
     if (pendingEventAttachment) {
-      const path = `event-media/${currentUser.uid}/${Date.now()}_${pendingEventAttachment.name}`;
+      const path = groupStoragePath(`event-media/${currentUser.uid}/${Date.now()}_${pendingEventAttachment.name}`);
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, pendingEventAttachment);
       attachmentUrl = await getDownloadURL(storageRef);
@@ -405,7 +447,7 @@ eventSaveBtn.addEventListener("click", async () => {
       attachmentName = pendingEventAttachment.name;
     }
 
-    await addDoc(collection(db, "events"), {
+    await addDoc(groupCollection("events"), {
       title,
       date: eventDate,
       location,
@@ -481,7 +523,7 @@ function openEventDetail(e) {
   views.eventDetail.hidden = false;
 
   if (unsubEventDetail) unsubEventDetail();
-  const q = query(collection(db, "messages"), where("eventId", "==", e.id), orderBy("createdAt", "asc"), limit(200));
+  const q = query(groupCollection("messages"), where("eventId", "==", e.id), orderBy("createdAt", "asc"), limit(200));
   unsubEventDetail = onSnapshot(q, (snap) => {
     eventMessagesEl.innerHTML = "";
     snap.forEach((docSnap) => renderMessage(eventMessagesEl, docSnap.data(), false));
@@ -495,7 +537,7 @@ async function setRsvp(eventId, status, btn) {
   [...rsvpRowEl.children].forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   await setDoc(
-    doc(db, "events", eventId, "rsvps", currentUser.uid),
+    doc(db, "groups", GROUP_ID, "events", eventId, "rsvps", currentUser.uid),
     { status, name: currentMemberProfile.name, updatedAt: serverTimestamp() },
     { merge: true }
   );
@@ -561,7 +603,7 @@ function renderMessage(container, m, showTagChip) {
 }
 
 function startChatListener() {
-  const q = query(collection(db, "messages"), orderBy("createdAt", "asc"), limit(200));
+  const q = query(groupCollection("messages"), orderBy("createdAt", "asc"), limit(200));
   onSnapshot(q, (snap) => {
     chatMessagesEl.innerHTML = "";
     snap.forEach((docSnap) => renderMessage(chatMessagesEl, docSnap.data(), true));
@@ -615,7 +657,7 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
     if (!text) return;
     textInput.value = "";
     autoGrow();
-    await addDoc(collection(db, "messages"), {
+    await addDoc(groupCollection("messages"), {
       text,
       type: "text",
       senderId: currentUser.uid,
@@ -654,12 +696,12 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
     progress.hidden = false;
     progress.textContent = "Uploading...";
     try {
-      const path = `chat-media/${currentUser.uid}/${Date.now()}_${file.name}`;
+      const path = groupStoragePath(`chat-media/${currentUser.uid}/${Date.now()}_${file.name}`);
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      await addDoc(collection(db, "messages"), {
+      await addDoc(groupCollection("messages"), {
         type: isVideo ? "video" : "image",
         mediaUrl: url,
         mediaPath: path,
@@ -683,12 +725,12 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
 // Kick off Firestore listeners once signed in
 // ---------------------------------------------------------------------------
 function startListeners() {
-  onSnapshot(query(collection(db, "members"), orderBy("name")), (snap) => {
+  onSnapshot(query(groupCollection("members"), orderBy("name")), (snap) => {
     allMembers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderMembers();
   });
 
-  onSnapshot(query(collection(db, "events"), orderBy("date", "asc")), (snap) => {
+  onSnapshot(query(groupCollection("events"), orderBy("date", "asc")), (snap) => {
     allEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderEvents();
   });
