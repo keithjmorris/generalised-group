@@ -15,7 +15,8 @@ service cloud.firestore {
       // like, each checked independently.
       match /members/{memberId} {
         allow read: if request.auth != null
-                    && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+                    && (request.auth.uid == memberId
+                        || exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)));
         allow create: if request.auth != null && request.auth.uid == memberId;
         allow update: if request.auth != null && request.auth.uid == memberId;
         allow delete: if false;
