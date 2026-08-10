@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- Signed-out screen (same phone flow as the main app) -->
+  <div id="signed-out" class="screen">
+    <div class="signin-card">
+      <h1>Admin</h1>
+
+      <div id="phone-step">
+        <p>Enter your phone number to sign in.</p>
+        <div class="phone-field">
+          <select id="country-code"></select>
+          <input type="tel" id="phone-number" placeholder="7123 456789" />
+        </div>
+        <button id="send-code-btn" class="btn-primary">Send code</button>
+      </div>
+
+      <div id="code-step" hidden>
+        <p>Enter the code sent to <span id="code-sent-to"></span>.</p>
+        <input type="text" id="sms-code" inputmode="numeric" placeholder="6-digit code" class="code-input" />
+        <button id="verify-code-btn" class="btn-primary">Verify</button>
+        <button id="change-number-btn" class="btn-link">Use a different number</button>
+      </div>
+
+      <p id="signin-error" class="error-text"></p>
+      <div id="recaptcha-container"></div>
+    </div>
+  </div>
+
+  <!-- Not an admin -->
+  <div id="not-admin" class="screen" hidden>
+    <div class="signin-card">
+      <h1>Not authorized</h1>
+      <p>This phone number doesn't have admin access.</p>
+      <button id="not-admin-signout-btn" class="btn-primary">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Admin panel -->
+  <div id="admin-panel" class="screen" hidden>
+    <header class="app-header">
+      <span>Groups</span>
+      <button id="admin-signout-btn" class="icon-btn" aria-label="Sign out" title="Sign out">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
+
+    <div style="padding:14px; max-width:480px; margin:0 auto; width:100%;">
+
+      <div class="new-event-form" style="margin:0 0 16px;">
+        <input type="text" id="new-group-slug" placeholder="URL slug (e.g. burnham-owners)" />
+        <input type="text" id="new-group-name" placeholder="Display name (e.g. Burnham Owners Club)" />
+        <div class="new-event-actions" style="justify-content:flex-start;">
+          <button id="create-group-btn" class="btn-primary" type="button" style="width:auto;">Create group</button>
+        </div>
+        <p id="admin-form-error" class="error-text"></p>
+      </div>
+
+      <div id="groups-list" class="list padded" style="padding:0;"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>
