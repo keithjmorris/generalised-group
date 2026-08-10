@@ -3,10 +3,10 @@
 // (see README.md for the exact steps)
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyCz63ejRwGg9kQkQixT0IwR4iTiY7HTiHs",
-  authDomain: "generalised-group.firebaseapp.com",
-  projectId: "generalised-group",
-  storageBucket: "generalised-group.firebasestorage.app",
-  messagingSenderId: "210450923723",
-  appId: "1:210450923723:web:ded5f5748d967bdb609b4e"
+   apiKey: "AIzaSyBiArjP7lglfHRFCxVpNdymQeDpUBo01co",
+  authDomain: "carchat-86225.firebaseapp.com",
+  projectId: "carchat-86225",
+  storageBucket: "carchat-86225.firebasestorage.app",
+  messagingSenderId: "977512816928",
+  appId: "1:977512816928:web:6e7a177f2886365f35f745"
 };

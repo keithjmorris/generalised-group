@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A group's own record (name etc.) - readable by any signed-in user so
+    // the app can show the group's display name before confirming
+    // membership. Groups are created manually in Firestore console only.
+    match /groups/{groupId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+
+      // Membership in a group is defined simply by having a member doc
+      // here - a person can have one in as many different groups as they
+      // like, each checked independently.
+      match /members/{memberId} {
+        allow read: if request.auth != null
+                    && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+        allow create: if request.auth != null && request.auth.uid == memberId;
+        allow update: if request.auth != null && request.auth.uid == memberId;
+        allow delete: if false;
+      }
+
+      match /events/{eventId} {
+        allow read: if request.auth != null
+                    && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+        allow create, update: if request.auth != null
+                    && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+        allow delete: if false;
+
+        match /rsvps/{uid} {
+          allow read: if request.auth != null
+                      && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+          allow write: if request.auth != null && request.auth.uid == uid;
+        }
+      }
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+                    && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+        allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.senderId
+                    && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+        allow update, delete: if false;
+      }
+    }
+  }
+}
