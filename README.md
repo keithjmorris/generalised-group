@@ -6,7 +6,7 @@ Members sign in with their phone number (international dialing supported).
 
 This app supports **any number of separate groups** from one shared
 Firebase project and one Vercel deployment. Each group gets its own URL -
-`your-app.vercel.app/g/carchat`, `your-app.vercel.app/g/burnham-owners`, and
+`your-app.vercel.app/carchat`, `your-app.vercel.app/burnham-owners`, and
 so on - and each group's members, events, and chat are completely separate
 from every other group's, even though they all live in the same database.
 A person can be a member of more than one group; which group they're using
@@ -23,7 +23,7 @@ small "on: Event name" tag) and in that event's own filtered discussion view.
 - `app.js` - all the logic: group resolution, auth, Firestore listeners, Storage uploads
 - `firebase-config.js` - **you edit this** with your project's config
 - `firestore.rules` / `storage.rules` - security rules to paste into Firebase
-- `vercel.json` - tells Vercel that any `/g/...` link should load this app
+- `vercel.json` - tells Vercel that any group link (e.g. `/carchat`) should load this app
 
 ## 1. Create the Firebase project
 
@@ -58,7 +58,7 @@ manually** before anyone can sign in to it:
 4. Add one field: `name` (string) - the display name shown in the app, e.g. "CarChat" or "Burnham Owners Club".
 5. Save.
 
-That group is now live at `your-app.vercel.app/g/{the-slug-you-chose}`.
+That group is now live at `your-app.vercel.app/{the-slug-you-chose}`.
 Share that link with that group's members - each group only ever sees its
 own data.
 
@@ -76,7 +76,7 @@ poster attachment (image or PDF).
 ## 5. Push to GitHub and deploy on Vercel
 
 1. In VS Code, initialize a git repo in this folder, commit, and push to a new GitHub repository.
-2. In Vercel, **Add New > Project**, import that GitHub repo. Since this is a static site with no build step, you can leave the framework preset as "Other" - no build command or output directory is needed. Vercel will automatically pick up `vercel.json`, which is what makes `/g/...` links work.
+2. In Vercel, **Add New > Project**, import that GitHub repo. Since this is a static site with no build step, you can leave the framework preset as "Other" - no build command or output directory is needed. Vercel will automatically pick up `vercel.json`, which is what makes group links work.
 3. Deploy. Once it's live, go back to Firebase Authentication settings (step 2.4) and add the Vercel URL to Authorized domains.
 
 ### Giving it a cleaner name than the default
@@ -92,7 +92,7 @@ code:
   registrar - ask if you'd like help with this step when you're ready.
 
 Either way, once you have a general-purpose URL, every group's link is just
-that URL plus `/g/{slug}` - nothing group-specific needs to live in the
+that URL plus `/{slug}` - nothing group-specific needs to live in the
 domain name itself.
 
 ## Notes on scaling this up

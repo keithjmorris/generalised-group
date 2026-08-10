@@ -26,7 +26,7 @@ const storage = getStorage(app);
 // group's URL they're currently on.
 // ---------------------------------------------------------------------------
 const GROUP_ID = (() => {
-  const match = window.location.pathname.match(/\/g\/([^/]+)/);
+  const match = window.location.pathname.match(/^\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : null;
 })();
 
