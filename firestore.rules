@@ -16,7 +16,7 @@ service cloud.firestore {
     // membership. Groups can be created by recognized admins through the
     // /admin panel, or manually in Firestore console.
     match /groups/{groupId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow create: if request.auth != null
                     && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow update, delete: if false;

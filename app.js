@@ -69,6 +69,11 @@ const groupReady = getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
   } else {
     document.getElementById("phone-step").hidden = false;
   }
+}).catch((err) => {
+  // Never leave the sign-in screen blank - fall back to the phone form
+  // (the more common case) rather than getting stuck with nothing shown.
+  console.error("Couldn't load group info:", err);
+  document.getElementById("phone-step").hidden = false;
 });
 
 // ---------------------------------------------------------------------------
