@@ -4,7 +4,8 @@
 import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged
+  getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, collection, addDoc, query, orderBy, where,
@@ -51,14 +52,23 @@ if (!GROUP_ID) {
   throw new Error("No group in URL - halting app init");
 }
 
-// Load the group's display name (set once by whoever created the group doc
-// in Firestore console) and apply it wherever the app currently says
-// "CarChat" - falls back to the raw group id if the doc has no name yet.
-getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
+// Load the group's display name and auth method (set once when the group
+// was created) and configure the sign-in screen accordingly - falls back to
+// phone auth if a group has no authMethod set (covers groups created before
+// this feature existed).
+let GROUP_AUTH_METHOD = "phone";
+const groupReady = getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
   const groupName = (groupSnap.exists() && groupSnap.data().name) || GROUP_ID;
+  GROUP_AUTH_METHOD = (groupSnap.exists() && groupSnap.data().authMethod) || "phone";
   document.title = groupName;
   const appNameEl = document.getElementById("app-name");
   if (appNameEl) appNameEl.textContent = groupName;
+
+  if (GROUP_AUTH_METHOD === "email") {
+    document.getElementById("email-step").hidden = false;
+  } else {
+    document.getElementById("phone-step").hidden = false;
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -83,6 +93,13 @@ const changeNumberBtn = document.getElementById("change-number-btn");
 const codeSentToEl = document.getElementById("code-sent-to");
 const displayNameEl = document.getElementById("display-name");
 const saveNameBtn = document.getElementById("save-name-btn");
+
+// Email sign-in step elements
+const emailStepEl = document.getElementById("email-step");
+const emailAddressEl = document.getElementById("email-address");
+const emailPasswordEl = document.getElementById("email-password");
+const emailSigninBtn = document.getElementById("email-signin-btn");
+const emailSignupBtn = document.getElementById("email-signup-btn");
 
 const views = {
   members: document.getElementById("view-members"),
@@ -222,11 +239,13 @@ saveNameBtn.addEventListener("click", async () => {
   saveNameBtn.disabled = true;
   const uid = pendingUser.uid;
   const phoneNumber = pendingUser.phoneNumber || "";
+  const email = pendingUser.email || "";
   pendingUser = null; // claim it immediately so a second click is a no-op
   try {
     await setDoc(groupDoc("members", uid), {
       name,
       phoneNumber,
+      email,
       role: "",
       memberSince: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -242,6 +261,52 @@ saveNameBtn.addEventListener("click", async () => {
   }
 });
 
+emailSigninBtn.addEventListener("click", async () => {
+  signinError.textContent = "";
+  const email = emailAddressEl.value.trim();
+  const password = emailPasswordEl.value;
+  if (!email || !password) {
+    signinError.textContent = "Enter your email and password.";
+    return;
+  }
+  emailSigninBtn.disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    console.error(err);
+    signinError.textContent = "Couldn't sign in - check your email and password, or create an account if you're new here.";
+  } finally {
+    emailSigninBtn.disabled = false;
+  }
+});
+
+emailSignupBtn.addEventListener("click", async () => {
+  signinError.textContent = "";
+  const email = emailAddressEl.value.trim();
+  const password = emailPasswordEl.value;
+  if (!email || !password) {
+    signinError.textContent = "Enter an email and choose a password.";
+    return;
+  }
+  if (password.length < 6) {
+    signinError.textContent = "Password must be at least 6 characters.";
+    return;
+  }
+  emailSignupBtn.disabled = true;
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    console.error(err);
+    if (err.code === "auth/email-already-in-use") {
+      signinError.textContent = "That email already has an account - try Sign in instead.";
+    } else {
+      signinError.textContent = `Couldn't create an account. (${err.code || "unknown error"})`;
+    }
+  } finally {
+    emailSignupBtn.disabled = false;
+  }
+});
+
 signOutBtn.addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async (user) => {
@@ -250,11 +315,14 @@ onAuthStateChanged(auth, async (user) => {
     memberProfileConfirmed = false;
     signedOutEl.hidden = false;
     appEl.hidden = true;
-    phoneStepEl.hidden = false;
+    await groupReady; // make sure we know which auth method to show before revealing it
+    phoneStepEl.hidden = GROUP_AUTH_METHOD !== "phone";
+    emailStepEl.hidden = GROUP_AUTH_METHOD !== "email";
     codeStepEl.hidden = true;
     nameStepEl.hidden = true;
     phoneNumberEl.value = "";
     smsCodeEl.value = "";
+    emailPasswordEl.value = "";
     return;
   }
 
@@ -275,10 +343,11 @@ onAuthStateChanged(auth, async (user) => {
     await setDoc(memberRef, { updatedAt: serverTimestamp() }, { merge: true });
     enterApp();
   } else {
-    // First time we've seen this phone number - ask for a name before
-    // creating their member card.
+    // First time we've seen this person - ask for a name before creating
+    // their member card.
     pendingUser = user;
     phoneStepEl.hidden = true;
+    emailStepEl.hidden = true;
     codeStepEl.hidden = true;
     nameStepEl.hidden = false;
   }

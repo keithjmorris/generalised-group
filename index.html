@@ -13,8 +13,8 @@
     <div class="signin-card">
       <h1 id="app-name">CarChat</h1>
 
-      <!-- Step 1: enter phone number -->
-      <div id="phone-step">
+      <!-- Step 1 (phone groups): enter phone number -->
+      <div id="phone-step" hidden>
         <p>Enter your phone number to sign in.</p>
         <div class="phone-field">
           <select id="country-code"></select>
@@ -24,7 +24,19 @@
         <button id="send-code-btn" class="btn-primary">Send code</button>
       </div>
 
-      <!-- Step 2: enter the SMS code -->
+      <!-- Step 1 (email groups): email + password -->
+      <div id="email-step" hidden>
+        <p>Sign in with your email and password.</p>
+        <input type="email" id="email-address" placeholder="you@example.com" autocomplete="email" />
+        <input type="password" id="email-password" placeholder="Password" autocomplete="current-password" style="margin-top:8px;" />
+        <p class="hint-text">New here? Enter an email and choose a password, then tap Create account.</p>
+        <div class="new-event-actions" style="justify-content:flex-start; gap:10px;">
+          <button id="email-signin-btn" class="btn-primary" style="width:auto;">Sign in</button>
+          <button id="email-signup-btn" class="btn-secondary" type="button">Create account</button>
+        </div>
+      </div>
+
+      <!-- Step 2 (phone groups): enter the SMS code -->
       <div id="code-step" hidden>
         <p>Enter the code sent to <span id="code-sent-to"></span>.</p>
         <input type="text" id="sms-code" inputmode="numeric" placeholder="6-digit code" class="code-input" />

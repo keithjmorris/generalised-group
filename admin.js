@@ -34,6 +34,7 @@ const adminSignoutBtn = document.getElementById("admin-signout-btn");
 const groupsListEl = document.getElementById("groups-list");
 const newGroupSlugEl = document.getElementById("new-group-slug");
 const newGroupNameEl = document.getElementById("new-group-name");
+const newGroupAuthMethodEl = document.getElementById("new-group-auth-method");
 const createGroupBtn = document.getElementById("create-group-btn");
 const adminFormErrorEl = document.getElementById("admin-form-error");
 
@@ -172,7 +173,7 @@ async function loadGroups() {
     row.innerHTML = `
       <div>
         <div class="member-name">${escapeHtml(g.name || g.id)}</div>
-        <div class="member-role">groupinfo.app/${escapeHtml(g.id)}</div>
+        <div class="member-role">groupinfo.app/${escapeHtml(g.id)} - signs in with ${g.authMethod === "email" ? "email & password" : "phone number"}</div>
       </div>
     `;
     groupsListEl.appendChild(row);
@@ -200,9 +201,10 @@ createGroupBtn.addEventListener("click", async () => {
       adminFormErrorEl.textContent = "That slug is already taken - choose another.";
       return;
     }
-    await setDoc(doc(db, "groups", slug), { name });
+    await setDoc(doc(db, "groups", slug), { name, authMethod: newGroupAuthMethodEl.value });
     newGroupSlugEl.value = "";
     newGroupNameEl.value = "";
+    newGroupAuthMethodEl.value = "phone";
     loadGroups();
   } catch (err) {
     console.error(err);
