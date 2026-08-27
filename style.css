@@ -287,6 +287,39 @@ button {
   color: #0C447C;
 }
 
+/* Topics */
+.topic-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.topic-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-accent, #E6F1FB);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.topic-title { font-size: 14px; font-weight: 500; }
+.topic-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.topic-unread-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
 .event-detail-header {
   display: flex;
   align-items: center;

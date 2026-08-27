@@ -28,5 +28,16 @@ service firebase.storage {
                         || request.resource.contentType == 'application/pdf');
       allow update, delete: if false;
     }
+
+    // Topic attachments, same treatment as event attachments.
+    match /groups/{groupId}/topic-media/{uid}/{fileName} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.size < 15 * 1024 * 1024
+                    && (request.resource.contentType.matches('image/.*')
+                        || request.resource.contentType == 'application/pdf');
+      allow update, delete: if false;
+    }
   }
 }

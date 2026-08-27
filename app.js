@@ -110,6 +110,8 @@ const views = {
   members: document.getElementById("view-members"),
   events: document.getElementById("view-events"),
   eventDetail: document.getElementById("view-event-detail"),
+  topics: document.getElementById("view-topics"),
+  topicDetail: document.getElementById("view-topic-detail"),
   chat: document.getElementById("view-chat"),
 };
 const tabButtons = document.querySelectorAll(".tab-btn");
@@ -117,6 +119,7 @@ const tabButtons = document.querySelectorAll(".tab-btn");
 let currentUser = null;
 let currentMemberProfile = null; // { name, photoURL }
 let unsubEventDetail = null; // holds the active event-discussion listener so we can detach it
+let unsubTopicDetail = null; // holds the active topic-thread listener so we can detach it
 
 // ---------------------------------------------------------------------------
 // Auth - phone number sign-in
@@ -381,9 +384,12 @@ function showTab(tab) {
   } else if (tab === "events") {
     views.events.hidden = false;
     headerTitleEl.textContent = "Events";
+  } else if (tab === "topics") {
+    views.topics.hidden = false;
+    headerTitleEl.textContent = "Topics";
   } else if (tab === "chat") {
     views.chat.hidden = false;
-    headerTitleEl.textContent = "Community chat";
+    headerTitleEl.textContent = "General chat";
   }
 }
 
@@ -623,6 +629,210 @@ eventBackBtn.addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Topics: a lighter-weight alternative to Events - no date/location/RSVP,
+// just a title and its own chat thread. A new topic is notification-worthy
+// (later); messages inside one are not, and (unlike Events) a topic's
+// messages never also appear in general chat - Topics is meant to be
+// independently discoverable via its own tab and read-status, not folded
+// into the general feed.
+// ---------------------------------------------------------------------------
+const topicsListEl = document.getElementById("topics-list");
+const topicBackBtn = document.getElementById("topic-back-btn");
+const topicDetailTitleEl = document.getElementById("topic-detail-title");
+const topicDetailMetaEl = document.getElementById("topic-detail-meta");
+const topicMessagesEl = document.getElementById("topic-messages");
+const topicAttachmentEl = document.getElementById("topic-detail-attachment");
+const newTopicBtn = document.getElementById("new-topic-btn");
+const newTopicFormEl = document.getElementById("new-topic-form");
+const topicTitleInput = document.getElementById("topic-title-input");
+const topicDescriptionInput = document.getElementById("topic-description-input");
+const topicAttachBtn = document.getElementById("topic-attach-btn");
+const topicAttachInput = document.getElementById("topic-attach-input");
+const topicAttachFilenameEl = document.getElementById("topic-attach-filename");
+const topicCancelBtn = document.getElementById("topic-cancel-btn");
+const topicSaveBtn = document.getElementById("topic-save-btn");
+const topicFormErrorEl = document.getElementById("topic-form-error");
+let pendingTopicAttachment = null;
+let allTopics = [];
+
+function topicReadDoc(topicId) {
+  return doc(db, "groups", GROUP_ID, "topics", topicId, "reads", currentUser.uid);
+}
+
+function resetNewTopicForm() {
+  topicTitleInput.value = "";
+  topicDescriptionInput.value = "";
+  topicAttachFilenameEl.textContent = "";
+  topicFormErrorEl.textContent = "";
+  pendingTopicAttachment = null;
+  topicSaveBtn.disabled = false;
+  topicSaveBtn.textContent = "Start topic";
+}
+
+newTopicBtn.addEventListener("click", () => {
+  const opening = newTopicFormEl.hidden;
+  newTopicFormEl.hidden = !opening;
+  if (opening) resetNewTopicForm();
+});
+
+topicCancelBtn.addEventListener("click", () => {
+  newTopicFormEl.hidden = true;
+  resetNewTopicForm();
+});
+
+topicAttachBtn.addEventListener("click", () => topicAttachInput.click());
+
+topicAttachInput.addEventListener("change", () => {
+  const file = topicAttachInput.files[0];
+  if (!file) return;
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+  if (!isImage && !isPdf) {
+    topicFormErrorEl.textContent = "Please choose an image or PDF file.";
+    topicAttachInput.value = "";
+    return;
+  }
+  if (file.size > 15 * 1024 * 1024) {
+    topicFormErrorEl.textContent = "That file is too large (15MB max).";
+    topicAttachInput.value = "";
+    return;
+  }
+  topicFormErrorEl.textContent = "";
+  pendingTopicAttachment = file;
+  topicAttachFilenameEl.textContent = file.name;
+});
+
+topicSaveBtn.addEventListener("click", async () => {
+  topicFormErrorEl.textContent = "";
+  const title = topicTitleInput.value.trim();
+  const description = topicDescriptionInput.value.trim();
+  if (!title) {
+    topicFormErrorEl.textContent = "Give the topic a title.";
+    return;
+  }
+
+  topicSaveBtn.disabled = true;
+  topicSaveBtn.textContent = "Saving...";
+  try {
+    let attachmentUrl = null;
+    let attachmentType = null;
+    let attachmentName = null;
+    if (pendingTopicAttachment) {
+      const path = groupStoragePath(`topic-media/${currentUser.uid}/${Date.now()}_${pendingTopicAttachment.name}`);
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, pendingTopicAttachment);
+      attachmentUrl = await getDownloadURL(storageRef);
+      attachmentType = pendingTopicAttachment.type.startsWith("image/") ? "image" : "pdf";
+      attachmentName = pendingTopicAttachment.name;
+    }
+
+    const newTopicRef = await addDoc(groupCollection("topics"), {
+      title,
+      description,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+      createdBy: currentUser.uid,
+      createdByName: currentMemberProfile.name,
+      createdAt: serverTimestamp(),
+      lastMessageAt: serverTimestamp(),
+    });
+    // The creator has implicitly "read" their own new topic.
+    await setDoc(topicReadDoc(newTopicRef.id), { lastReadAt: serverTimestamp() });
+
+    newTopicFormEl.hidden = true;
+    resetNewTopicForm();
+  } catch (err) {
+    console.error(err);
+    topicFormErrorEl.textContent = "Something went wrong saving the topic. Please try again.";
+    topicSaveBtn.disabled = false;
+    topicSaveBtn.textContent = "Start topic";
+  }
+});
+
+async function renderTopics() {
+  if (allTopics.length === 0) {
+    topicsListEl.innerHTML = `<div class="empty-state">No topics yet - start one!</div>`;
+    return;
+  }
+
+  // Figure out unread status for each topic (does it have activity since
+  // this member last opened it) in parallel, rather than one at a time.
+  const withUnread = await Promise.all(
+    allTopics.map(async (t) => {
+      let unread = false;
+      try {
+        const readSnap = await getDoc(topicReadDoc(t.id));
+        const lastReadAt = readSnap.exists() ? readSnap.data().lastReadAt : null;
+        const lastMessageAt = t.lastMessageAt || t.createdAt;
+        unread = !lastReadAt || (lastMessageAt && lastMessageAt.toMillis() > lastReadAt.toMillis());
+      } catch (err) {
+        // If we can't tell, default to not-unread rather than erroring the whole list.
+      }
+      return { ...t, unread };
+    })
+  );
+
+  topicsListEl.innerHTML = "";
+  withUnread.forEach((t) => {
+    const card = document.createElement("div");
+    card.className = "topic-card";
+    card.innerHTML = `
+      <div class="topic-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 4h16v12H8l-4 4V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="flex:1;">
+        <div class="topic-title">${escapeHtml(t.title)}</div>
+        <div class="topic-meta">Started by ${escapeHtml(t.createdByName || "a member")}</div>
+      </div>
+      ${t.unread ? '<div class="topic-unread-dot" title="Unread"></div>' : ""}
+    `;
+    card.addEventListener("click", () => openTopicDetail(t));
+    topicsListEl.appendChild(card);
+  });
+}
+
+async function openTopicDetail(t) {
+  topicDetailTitleEl.textContent = t.title;
+  topicDetailMetaEl.textContent = `Started by ${t.createdByName || "a member"}${t.description ? " - " + t.description : ""}`;
+
+  topicAttachmentEl.innerHTML = "";
+  if (t.attachmentUrl) {
+    if (t.attachmentType === "image") {
+      topicAttachmentEl.innerHTML = `<img src="${t.attachmentUrl}" alt="${escapeHtml(t.attachmentName || "Topic attachment")}" />`;
+    } else {
+      topicAttachmentEl.innerHTML = `<a class="attachment-link" href="${t.attachmentUrl}" target="_blank" rel="noopener">View attachment: ${escapeHtml(t.attachmentName || "PDF")}</a>`;
+    }
+  }
+
+  Object.values(views).forEach((v) => (v.hidden = true));
+  views.topicDetail.hidden = false;
+
+  // Mark read as soon as they open it, so the unread dot clears promptly.
+  setDoc(topicReadDoc(t.id), { lastReadAt: serverTimestamp() }).catch((err) => console.error(err));
+
+  if (unsubTopicDetail) unsubTopicDetail();
+  const q = query(collection(db, "groups", GROUP_ID, "topics", t.id, "messages"), orderBy("createdAt", "asc"), limit(200));
+  unsubTopicDetail = onSnapshot(q, (snap) => {
+    topicMessagesEl.innerHTML = "";
+    snap.forEach((docSnap) => renderMessage(topicMessagesEl, docSnap.data(), false));
+    topicMessagesEl.scrollTop = topicMessagesEl.scrollHeight;
+  });
+
+  buildComposer(document.getElementById("topic-composer"), {
+    placeholder: "Message this topic",
+    messagesCollectionRef: collection(db, "groups", GROUP_ID, "topics", t.id, "messages"),
+    onAfterSend: () => setDoc(groupDoc("topics", t.id), { lastMessageAt: serverTimestamp() }, { merge: true }),
+  });
+}
+
+topicBackBtn.addEventListener("click", () => {
+  if (unsubTopicDetail) unsubTopicDetail();
+  showTab("topics");
+  renderTopics(); // refresh unread dots now that one may have just been read
+});
+
+// ---------------------------------------------------------------------------
 // General chat
 // ---------------------------------------------------------------------------
 const chatMessagesEl = document.getElementById("chat-messages");
@@ -688,7 +898,8 @@ function startChatListener() {
 // ---------------------------------------------------------------------------
 // Shared composer (used by both general chat and event discussion)
 // ---------------------------------------------------------------------------
-function buildComposer(container, { eventId = null, eventTitle = null, placeholder = "Type a message" } = {}) {
+function buildComposer(container, { eventId = null, eventTitle = null, placeholder = "Type a message", messagesCollectionRef = null, onAfterSend = null } = {}) {
+  const targetCollection = messagesCollectionRef || groupCollection("messages");
   container.innerHTML = "";
 
   const fileInput = document.createElement("input");
@@ -731,7 +942,7 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
     if (!text) return;
     textInput.value = "";
     autoGrow();
-    await addDoc(groupCollection("messages"), {
+    await addDoc(targetCollection, {
       text,
       type: "text",
       senderId: currentUser.uid,
@@ -740,6 +951,7 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
       eventTitle: eventTitle || null,
       createdAt: serverTimestamp(),
     });
+    if (onAfterSend) onAfterSend();
   };
 
   sendBtn.addEventListener("click", send);
@@ -775,7 +987,7 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      await addDoc(groupCollection("messages"), {
+      await addDoc(targetCollection, {
         type: isVideo ? "video" : "image",
         mediaUrl: url,
         mediaPath: path,
@@ -786,6 +998,7 @@ function buildComposer(container, { eventId = null, eventTitle = null, placehold
         eventTitle: eventTitle || null,
         createdAt: serverTimestamp(),
       });
+      if (onAfterSend) onAfterSend();
     } catch (err) {
       console.error(err);
       alert("Upload failed. Please try again.");
@@ -807,6 +1020,11 @@ function startListeners() {
   onSnapshot(query(groupCollection("events"), orderBy("date", "asc")), (snap) => {
     allEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderEvents();
+  });
+
+  onSnapshot(query(groupCollection("topics"), orderBy("lastMessageAt", "desc")), (snap) => {
+    allTopics = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderTopics();
   });
 
   startChatListener();
