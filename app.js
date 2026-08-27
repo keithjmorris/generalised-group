@@ -654,6 +654,7 @@ const topicSaveBtn = document.getElementById("topic-save-btn");
 const topicFormErrorEl = document.getElementById("topic-form-error");
 let pendingTopicAttachment = null;
 let allTopics = [];
+let markTopicReadPromise = Promise.resolve();
 
 function topicReadDoc(topicId) {
   return doc(db, "groups", GROUP_ID, "topics", topicId, "reads", currentUser.uid);
@@ -809,7 +810,10 @@ async function openTopicDetail(t) {
   views.topicDetail.hidden = false;
 
   // Mark read as soon as they open it, so the unread dot clears promptly.
-  setDoc(topicReadDoc(t.id), { lastReadAt: serverTimestamp() }).catch((err) => console.error(err));
+  // We hang on to this promise so "Back" can wait for it to actually land
+  // before re-checking read status - otherwise a quick tap back can check
+  // before the write has finished, leaving the dot showing incorrectly.
+  markTopicReadPromise = setDoc(topicReadDoc(t.id), { lastReadAt: serverTimestamp() }).catch((err) => console.error(err));
 
   if (unsubTopicDetail) unsubTopicDetail();
   const q = query(collection(db, "groups", GROUP_ID, "topics", t.id, "messages"), orderBy("createdAt", "asc"), limit(200));
@@ -826,9 +830,10 @@ async function openTopicDetail(t) {
   });
 }
 
-topicBackBtn.addEventListener("click", () => {
+topicBackBtn.addEventListener("click", async () => {
   if (unsubTopicDetail) unsubTopicDetail();
   showTab("topics");
+  await markTopicReadPromise; // make sure the read marker actually landed before we re-check it
   renderTopics(); // refresh unread dots now that one may have just been read
 });
 
