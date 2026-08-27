@@ -49,11 +49,24 @@ if (!GROUP_ID) {
     <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;font-family:-apple-system,sans-serif;text-align:center;color:#5b6b73;">
       <div>
         <h1 style="color:#111;">No group specified</h1>
-        <p>This link is missing a group - it should look like <code>.../g/your-group-name</code>.<br/>Check the link you were given and try again.</p>
+        <p>This link is missing a group - it should look like <code>.../your-group-name</code>.<br/>Check the link you were given and try again.</p>
       </div>
     </div>`;
   throw new Error("No group in URL - halting app init");
 }
+
+// A real, fetchable manifest URL scoped to this group - set immediately,
+// synchronously, rather than waiting on the Firestore group-info load or
+// generating a browser-only blob: URL (see /api/manifest.js for why).
+(() => {
+  let manifestLink = document.querySelector('link[rel="manifest"]');
+  if (!manifestLink) {
+    manifestLink = document.createElement("link");
+    manifestLink.rel = "manifest";
+    document.head.appendChild(manifestLink);
+  }
+  manifestLink.href = `/api/manifest?group=${encodeURIComponent(GROUP_ID)}`;
+})();
 
 // Load the group's display name and auth method (set once when the group
 // was created) and configure the sign-in screen accordingly - falls back to
@@ -74,30 +87,6 @@ const groupReady = getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
   } else {
     document.getElementById("phone-step").hidden = false;
   }
-
-  // A single static manifest.json can't work for a multi-group app, since
-  // "Add to Home Screen" needs to reopen to *this* group's page, not always
-  // the same one - so build one on the fly, scoped to the current URL.
-  const manifest = {
-    name: groupName,
-    short_name: groupName.length > 12 ? groupName.slice(0, 12) : groupName,
-    start_url: window.location.pathname,
-    display: "standalone",
-    background_color: "#f5f5f4",
-    theme_color: "#075E54",
-    icons: [
-      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-  };
-  const manifestUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" }));
-  let manifestLink = document.querySelector('link[rel="manifest"]');
-  if (!manifestLink) {
-    manifestLink = document.createElement("link");
-    manifestLink.rel = "manifest";
-    document.head.appendChild(manifestLink);
-  }
-  manifestLink.href = manifestUrl;
 }).catch((err) => {
   // Never leave the sign-in screen blank - fall back to the phone form
   // (the more common case) rather than getting stuck with nothing shown.
