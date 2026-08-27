@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Firebase setup
 // ---------------------------------------------------------------------------
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, vapidKey } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged,
@@ -14,6 +14,9 @@ import {
 import {
   getStorage, ref, uploadBytes, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
+import {
+  getMessaging, getToken, onMessage, isSupported as isMessagingSupported
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -57,9 +60,11 @@ if (!GROUP_ID) {
 // phone auth if a group has no authMethod set (covers groups created before
 // this feature existed).
 let GROUP_AUTH_METHOD = "phone";
+let GROUP_NOTIFICATIONS_ENABLED = false;
 const groupReady = getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
   const groupName = (groupSnap.exists() && groupSnap.data().name) || GROUP_ID;
   GROUP_AUTH_METHOD = (groupSnap.exists() && groupSnap.data().authMethod) || "phone";
+  GROUP_NOTIFICATIONS_ENABLED = !!(groupSnap.exists() && groupSnap.data().notificationsEnabled);
   document.title = groupName;
   const appNameEl = document.getElementById("app-name");
   if (appNameEl) appNameEl.textContent = groupName;
@@ -69,6 +74,30 @@ const groupReady = getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
   } else {
     document.getElementById("phone-step").hidden = false;
   }
+
+  // A single static manifest.json can't work for a multi-group app, since
+  // "Add to Home Screen" needs to reopen to *this* group's page, not always
+  // the same one - so build one on the fly, scoped to the current URL.
+  const manifest = {
+    name: groupName,
+    short_name: groupName.length > 12 ? groupName.slice(0, 12) : groupName,
+    start_url: window.location.pathname,
+    display: "standalone",
+    background_color: "#f5f5f4",
+    theme_color: "#075E54",
+    icons: [
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+  };
+  const manifestUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" }));
+  let manifestLink = document.querySelector('link[rel="manifest"]');
+  if (!manifestLink) {
+    manifestLink = document.createElement("link");
+    manifestLink.rel = "manifest";
+    document.head.appendChild(manifestLink);
+  }
+  manifestLink.href = manifestUrl;
 }).catch((err) => {
   // Never leave the sign-in screen blank - fall back to the phone form
   // (the more common case) rather than getting stuck with nothing shown.
@@ -331,6 +360,9 @@ onAuthStateChanged(auth, async (user) => {
     phoneNumberEl.value = "";
     smsCodeEl.value = "";
     emailPasswordEl.value = "";
+    document.getElementById("notif-bell-btn").hidden = true;
+    document.getElementById("notif-bell-btn").classList.remove("notif-on");
+    document.getElementById("ios-install-banner").hidden = true;
     return;
   }
 
@@ -1034,7 +1066,101 @@ function startListeners() {
 
   startChatListener();
   buildComposer(document.getElementById("chat-composer"), { placeholder: "Type a message" });
+
+  initNotifications();
 }
+
+// ---------------------------------------------------------------------------
+// Push notifications - optional per group. A notification fires only when a
+// new Topic or Event is created (never for individual messages). This
+// section sets up the client-side plumbing (permission, service worker, FCM
+// token, on/off toggle); the actual sending happens in a separate Cloud
+// Function, deployed independently of the normal Vercel/GitHub push.
+// ---------------------------------------------------------------------------
+const notifBellBtn = document.getElementById("notif-bell-btn");
+const notifBellIcon = document.getElementById("notif-bell-icon");
+const iosInstallBannerEl = document.getElementById("ios-install-banner");
+const iosBannerDismissBtn = document.getElementById("ios-banner-dismiss-btn");
+
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+iosBannerDismissBtn.addEventListener("click", () => {
+  iosInstallBannerEl.hidden = true;
+});
+
+async function initNotifications() {
+  if (!GROUP_NOTIFICATIONS_ENABLED) return; // this group hasn't turned the feature on at all
+  if (!("Notification" in window) || !(await isMessagingSupported().catch(() => false))) return; // unsupported browser - fail quietly, no bell shown
+
+  notifBellBtn.hidden = false;
+
+  // Reflect this member's current on/off state on the bell icon.
+  const memberSnap = await getDoc(groupDoc("members", currentUser.uid));
+  const notifsOn = !!(memberSnap.exists() && memberSnap.data().notificationsOn);
+  notifBellBtn.classList.toggle("notif-on", notifsOn);
+
+  // iOS specifically requires the app to be installed to the Home Screen
+  // before notifications can work at all - flag that early, once per
+  // session, rather than letting someone hit a confusing dead end on tap.
+  if (isIOS() && !isStandalone() && !notifsOn) {
+    iosInstallBannerEl.hidden = false;
+  }
+
+  notifBellBtn.onclick = () => toggleNotifications(notifsOn);
+}
+
+async function toggleNotifications(currentlyOn) {
+  if (currentlyOn) {
+    await setDoc(groupDoc("members", currentUser.uid), { notificationsOn: false }, { merge: true });
+    notifBellBtn.classList.remove("notif-on");
+    return;
+  }
+
+  if (isIOS() && !isStandalone()) {
+    iosInstallBannerEl.hidden = false;
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      alert("Notifications were blocked. You can allow them again in your browser's site settings if you change your mind.");
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+
+    await setDoc(groupDoc("members", currentUser.uid), { notificationsOn: true, fcmToken: token }, { merge: true });
+    notifBellBtn.classList.add("notif-on");
+  } catch (err) {
+    console.error("Couldn't enable notifications:", err);
+    alert("Something went wrong turning on notifications. Please try again.");
+  }
+}
+
+// Foreground handler - fires only while this tab is actually open and
+// focused. Background delivery (tab closed) is handled entirely by
+// firebase-messaging-sw.js instead, a separate file/code path.
+isMessagingSupported().then((supported) => {
+  if (!supported) return;
+  const messaging = getMessaging(app);
+  onMessage(messaging, (payload) => {
+    // Payload is data-only by design (see the service worker file for why) -
+    // build the notification ourselves, in exactly this one place for the
+    // foreground case.
+    const { title, body } = payload.data || {};
+    if (title && Notification.permission === "granted") {
+      new Notification(title, { body, icon: "/icon-192.png" });
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Small helpers

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CarChat</title>
 <link rel="stylesheet" href="/style.css" />
+<link rel="manifest" href="/manifest.json" />
 </head>
 <body>
 
@@ -61,10 +62,22 @@
 
     <header class="app-header">
       <span id="header-title">Members</span>
-      <button id="sign-out-btn" class="icon-btn" aria-label="Sign out" title="Sign out">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <button id="notif-bell-btn" class="icon-btn" aria-label="Notifications" title="Notifications" hidden>
+          <svg id="notif-bell-icon" viewBox="0 0 24 24" width="20" height="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="sign-out-btn" class="icon-btn" aria-label="Sign out" title="Sign out">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
     </header>
+
+    <!-- iOS-specific instructions, shown only when relevant -->
+    <div id="ios-install-banner" class="ios-install-banner" hidden>
+      <p><strong>One extra step for notifications on iPhone/iPad:</strong> Apple only allows this after the app is added to your Home Screen.</p>
+      <p>Tap the Share icon in Safari, choose <strong>Add to Home Screen</strong>, then reopen the app from the new icon and try again.</p>
+      <button id="ios-banner-dismiss-btn" class="btn-link">Got it</button>
+    </div>
 
     <!-- Members tab -->
     <section id="view-members" class="view">
