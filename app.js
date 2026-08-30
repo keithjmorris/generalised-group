@@ -1121,7 +1121,19 @@ iosBannerDismissBtn.addEventListener("click", () => {
 
 async function initNotifications() {
   if (!GROUP_NOTIFICATIONS_ENABLED) return; // this group hasn't turned the feature on at all
-  if (!("Notification" in window) || !(await isMessagingSupported().catch(() => false))) return; // unsupported browser - fail quietly, no bell shown
+  if (!("Notification" in window)) return; // genuinely unsupported browser - nothing to offer
+
+  // iOS specifically requires the app to be installed to the Home Screen
+  // before notifications can work at all - check this FIRST and explain it,
+  // rather than letting the messaging-support check below fail silently
+  // (it correctly reports "unsupported" in this exact situation, which
+  // would otherwise skip past this banner and show nothing at all).
+  if (isIOS() && !isStandalone()) {
+    iosInstallBannerEl.hidden = false;
+    return;
+  }
+
+  if (!(await isMessagingSupported().catch(() => false))) return; // some other unsupported browser - fail quietly
 
   notifBellBtn.hidden = false;
 
@@ -1129,13 +1141,6 @@ async function initNotifications() {
   const memberSnap = await getDoc(groupDoc("members", currentUser.uid));
   const notifsOn = !!(memberSnap.exists() && memberSnap.data().notificationsOn);
   notifBellBtn.classList.toggle("notif-on", notifsOn);
-
-  // iOS specifically requires the app to be installed to the Home Screen
-  // before notifications can work at all - flag that early, once per
-  // session, rather than letting someone hit a confusing dead end on tap.
-  if (isIOS() && !isStandalone() && !notifsOn) {
-    iosInstallBannerEl.hidden = false;
-  }
 
   notifBellBtn.onclick = () => toggleNotifications(notifsOn);
 }
