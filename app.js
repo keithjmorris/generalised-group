@@ -351,6 +351,7 @@ onAuthStateChanged(auth, async (user) => {
     emailPasswordEl.value = "";
     document.getElementById("notif-bell-btn").hidden = true;
     document.getElementById("notif-bell-btn").classList.remove("notif-on");
+    document.getElementById("notif-bell-slash").hidden = true;
     document.getElementById("ios-install-banner").hidden = true;
     return;
   }
@@ -1105,8 +1106,14 @@ function startListeners() {
 // ---------------------------------------------------------------------------
 const notifBellBtn = document.getElementById("notif-bell-btn");
 const notifBellIcon = document.getElementById("notif-bell-icon");
+const notifBellSlash = document.getElementById("notif-bell-slash");
 const iosInstallBannerEl = document.getElementById("ios-install-banner");
 const iosBannerDismissBtn = document.getElementById("ios-banner-dismiss-btn");
+
+function setBellState(on) {
+  notifBellBtn.classList.toggle("notif-on", on);
+  notifBellSlash.hidden = on; // slash shows when OFF - same white icon either way, the line is the signal
+}
 
 function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -1141,6 +1148,7 @@ async function initNotifications() {
   const memberSnap = await getDoc(groupDoc("members", currentUser.uid));
   const notifsOn = !!(memberSnap.exists() && memberSnap.data().notificationsOn);
   notifBellBtn.classList.toggle("notif-on", notifsOn);
+  notifBellSlash.hidden = notifsOn;
 
   notifBellBtn.onclick = () => toggleNotifications();
 }
@@ -1150,7 +1158,7 @@ async function toggleNotifications() {
 
   if (currentlyOn) {
     await setDoc(groupDoc("members", currentUser.uid), { notificationsOn: false }, { merge: true });
-    notifBellBtn.classList.remove("notif-on");
+    setBellState(false);
     return;
   }
 
@@ -1171,7 +1179,7 @@ async function toggleNotifications() {
     const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
 
     await setDoc(groupDoc("members", currentUser.uid), { notificationsOn: true, fcmToken: token }, { merge: true });
-    notifBellBtn.classList.add("notif-on");
+    setBellState(true);
   } catch (err) {
     console.error("Couldn't enable notifications:", err);
     alert("Something went wrong turning on notifications. Please try again.");
