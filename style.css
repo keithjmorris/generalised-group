@@ -323,7 +323,7 @@ button {
 }
 .topic-title { font-size: 14px; font-weight: 500; }
 .topic-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
-.topic-unread-dot {
+.unread-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;

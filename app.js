@@ -548,7 +548,7 @@ eventSaveBtn.addEventListener("click", async () => {
       attachmentName = pendingEventAttachment.name;
     }
 
-    await addDoc(groupCollection("events"), {
+    const newEventRef = await addDoc(groupCollection("events"), {
       title,
       date: eventDate,
       location,
@@ -559,7 +559,11 @@ eventSaveBtn.addEventListener("click", async () => {
       createdBy: currentUser.uid,
       createdByName: currentMemberProfile.name,
       createdAt: serverTimestamp(),
+      lastMessageAt: serverTimestamp(),
     });
+    // The creator has implicitly "read" their own new event.
+    await setDoc(eventReadDoc(newEventRef.id), { lastReadAt: serverTimestamp() });
+    renderEvents(); // the live listener may have already re-rendered before this marker existed - refresh once more now that it does
 
     newEventFormEl.hidden = true;
     resetNewEventForm();
@@ -571,13 +575,34 @@ eventSaveBtn.addEventListener("click", async () => {
   }
 });
 
-function renderEvents() {
-  eventsListEl.innerHTML = "";
+function eventReadDoc(eventId) {
+  return doc(db, "groups", GROUP_ID, "events", eventId, "reads", currentUser.uid);
+}
+let markEventReadPromise = Promise.resolve();
+
+async function renderEvents() {
   if (allEvents.length === 0) {
     eventsListEl.innerHTML = `<div class="empty-state">No upcoming events yet.</div>`;
     return;
   }
-  allEvents.forEach((e) => {
+
+  const withUnread = await Promise.all(
+    allEvents.map(async (e) => {
+      let unread = false;
+      try {
+        const readSnap = await getDoc(eventReadDoc(e.id));
+        const lastReadAt = readSnap.exists() ? readSnap.data().lastReadAt : null;
+        const lastMessageAt = e.lastMessageAt || e.createdAt;
+        unread = !lastReadAt || (lastMessageAt && lastMessageAt.toMillis() > lastReadAt.toMillis());
+      } catch (err) {
+        // If we can't tell, default to not-unread rather than erroring the whole list.
+      }
+      return { ...e, unread };
+    })
+  );
+
+  eventsListEl.innerHTML = "";
+  withUnread.forEach((e) => {
     const d = e.date && typeof e.date.toDate === "function" ? e.date.toDate() : null;
     const card = document.createElement("div");
     card.className = "event-card";
@@ -586,10 +611,11 @@ function renderEvents() {
         <div class="month">${d ? d.toLocaleString(undefined, { month: "short" }) : ""}</div>
         <div class="day">${d ? d.getDate() : "-"}</div>
       </div>
-      <div>
+      <div style="flex:1;">
         <div class="event-title">${escapeHtml(e.title)}</div>
         <div class="event-meta">${d ? d.toLocaleString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}${e.location ? ", " + escapeHtml(e.location) : ""}</div>
       </div>
+      ${e.unread ? '<div class="unread-dot" title="Unread"></div>' : ""}
     `;
     card.addEventListener("click", () => openEventDetail(e));
     eventsListEl.appendChild(card);
@@ -623,6 +649,9 @@ function openEventDetail(e) {
   Object.values(views).forEach((v) => (v.hidden = true));
   views.eventDetail.hidden = false;
 
+  // Mark read as soon as they open it, so the unread dot clears promptly.
+  markEventReadPromise = setDoc(eventReadDoc(e.id), { lastReadAt: serverTimestamp() }).catch((err) => console.error(err));
+
   if (unsubEventDetail) unsubEventDetail();
   const q = query(groupCollection("messages"), where("eventId", "==", e.id), orderBy("createdAt", "asc"), limit(200));
   unsubEventDetail = onSnapshot(q, (snap) => {
@@ -631,7 +660,12 @@ function openEventDetail(e) {
     eventMessagesEl.scrollTop = eventMessagesEl.scrollHeight;
   });
 
-  buildComposer(document.getElementById("event-composer"), { eventId: e.id, eventTitle: e.title, placeholder: "Comment on this event" });
+  buildComposer(document.getElementById("event-composer"), {
+    eventId: e.id,
+    eventTitle: e.title,
+    placeholder: "Comment on this event",
+    onAfterSend: () => setDoc(groupDoc("events", e.id), { lastMessageAt: serverTimestamp() }, { merge: true }),
+  });
 }
 
 async function setRsvp(eventId, status, btn) {
@@ -644,9 +678,11 @@ async function setRsvp(eventId, status, btn) {
   );
 }
 
-eventBackBtn.addEventListener("click", () => {
+eventBackBtn.addEventListener("click", async () => {
   if (unsubEventDetail) unsubEventDetail();
   showTab("events");
+  await markEventReadPromise;
+  renderEvents();
 });
 
 // ---------------------------------------------------------------------------
@@ -761,6 +797,7 @@ topicSaveBtn.addEventListener("click", async () => {
     });
     // The creator has implicitly "read" their own new topic.
     await setDoc(topicReadDoc(newTopicRef.id), { lastReadAt: serverTimestamp() });
+    renderTopics(); // the live listener may have already re-rendered before this marker existed - refresh once more now that it does
 
     newTopicFormEl.hidden = true;
     resetNewTopicForm();
