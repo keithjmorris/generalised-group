@@ -1142,10 +1142,12 @@ async function initNotifications() {
   const notifsOn = !!(memberSnap.exists() && memberSnap.data().notificationsOn);
   notifBellBtn.classList.toggle("notif-on", notifsOn);
 
-  notifBellBtn.onclick = () => toggleNotifications(notifsOn);
+  notifBellBtn.onclick = () => toggleNotifications();
 }
 
-async function toggleNotifications(currentlyOn) {
+async function toggleNotifications() {
+  const currentlyOn = notifBellBtn.classList.contains("notif-on");
+
   if (currentlyOn) {
     await setDoc(groupDoc("members", currentUser.uid), { notificationsOn: false }, { merge: true });
     notifBellBtn.classList.remove("notif-on");
