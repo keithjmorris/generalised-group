@@ -172,12 +172,31 @@ async function loadGroups() {
     const row = document.createElement("div");
     row.className = "member-row";
     row.innerHTML = `
-      <div>
+      <div style="flex:1;">
         <div class="member-name">${escapeHtml(g.name || g.id)}</div>
-        <div class="member-role">groupinfo.app/${escapeHtml(g.id)} - signs in with ${g.authMethod === "email" ? "email & password" : "phone number"}${g.notificationsEnabled ? " - notifications on" : ""}</div>
+        <div class="member-role">groupinfo.app/${escapeHtml(g.id)} - signs in with ${g.authMethod === "email" ? "email & password" : "phone number"}</div>
       </div>
+      <button class="btn-secondary notif-toggle-btn" data-group-id="${escapeHtml(g.id)}" data-current="${g.notificationsEnabled ? "on" : "off"}" style="flex-shrink:0;">
+        Notifications: ${g.notificationsEnabled ? "On" : "Off"}
+      </button>
     `;
     groupsListEl.appendChild(row);
+  });
+
+  groupsListEl.querySelectorAll(".notif-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const groupId = btn.dataset.groupId;
+      const newValue = btn.dataset.current !== "on";
+      btn.disabled = true;
+      try {
+        await setDoc(doc(db, "groups", groupId), { notificationsEnabled: newValue }, { merge: true });
+        loadGroups();
+      } catch (err) {
+        console.error(err);
+        alert("Couldn't update that group. Please try again.");
+        btn.disabled = false;
+      }
+    });
   });
 }
 
