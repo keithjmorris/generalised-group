@@ -1112,7 +1112,7 @@ const iosBannerDismissBtn = document.getElementById("ios-banner-dismiss-btn");
 
 function setBellState(on) {
   notifBellBtn.classList.toggle("notif-on", on);
-  notifBellSlash.hidden = on; // slash shows when OFF - same white icon either way, the line is the signal
+  notifBellSlash.style.display = on ? "none" : "inline"; // slash shows when OFF - same white icon either way, the line is the signal
 }
 
 function isIOS() {
@@ -1148,7 +1148,7 @@ async function initNotifications() {
   const memberSnap = await getDoc(groupDoc("members", currentUser.uid));
   const notifsOn = !!(memberSnap.exists() && memberSnap.data().notificationsOn);
   notifBellBtn.classList.toggle("notif-on", notifsOn);
-  notifBellSlash.hidden = notifsOn;
+  notifBellSlash.style.display = notifsOn ? "none" : "inline";
 
   notifBellBtn.onclick = () => toggleNotifications();
 }
