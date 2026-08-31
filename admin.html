@@ -65,6 +65,11 @@
           <input type="checkbox" id="new-group-notifications" style="width:auto;" />
           Allow members to turn on notifications for new topics/events
         </label>
+        <div class="event-attach-row">
+          <button id="new-group-icon-btn" class="btn-secondary" type="button">Upload group icon (optional)</button>
+          <input type="file" id="new-group-icon-input" accept="image/*" hidden />
+          <span id="new-group-icon-filename" class="attach-filename"></span>
+        </div>
         <div class="new-event-actions" style="justify-content:flex-start;">
           <button id="create-group-btn" class="btn-primary" type="button" style="width:auto;">Create group</button>
         </div>
@@ -72,6 +77,7 @@
       </div>
 
       <div id="groups-list" class="list padded" style="padding:0;"></div>
+      <input type="file" id="change-group-icon-input" accept="image/*" hidden />
     </div>
   </div>
 

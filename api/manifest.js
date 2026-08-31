@@ -6,6 +6,10 @@
 // same-origin URL like this one doesn't have that problem.
 module.exports = (req, res) => {
   const group = (req.query.group || "").toString().slice(0, 100);
+  const customIcon = (req.query.icon || "").toString();
+  // Only accept a genuine https URL here - anything else falls back to the
+  // default icons rather than risk passing through something malformed.
+  const iconUrl = /^https:\/\//.test(customIcon) ? customIcon : null;
 
   const manifest = {
     name: group || "Group Chat",
@@ -14,10 +18,15 @@ module.exports = (req, res) => {
     display: "standalone",
     background_color: "#f5f5f4",
     theme_color: "#075E54",
-    icons: [
-      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
+    icons: iconUrl
+      ? [
+          { src: iconUrl, sizes: "192x192", type: "image/png" },
+          { src: iconUrl, sizes: "512x512", type: "image/png" },
+        ]
+      : [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
   };
 
   res.setHeader("Content-Type", "application/manifest+json");

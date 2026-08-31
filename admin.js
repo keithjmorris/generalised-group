@@ -6,10 +6,14 @@ import {
 import {
   getFirestore, doc, getDoc, setDoc, collection, getDocs, orderBy, query
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -36,6 +40,24 @@ const newGroupSlugEl = document.getElementById("new-group-slug");
 const newGroupNameEl = document.getElementById("new-group-name");
 const newGroupAuthMethodEl = document.getElementById("new-group-auth-method");
 const newGroupNotificationsEl = document.getElementById("new-group-notifications");
+const newGroupIconBtn = document.getElementById("new-group-icon-btn");
+const newGroupIconInput = document.getElementById("new-group-icon-input");
+const newGroupIconFilenameEl = document.getElementById("new-group-icon-filename");
+const changeGroupIconInput = document.getElementById("change-group-icon-input");
+let pendingGroupIcon = null;
+
+newGroupIconBtn.addEventListener("click", () => newGroupIconInput.click());
+newGroupIconInput.addEventListener("change", () => {
+  const file = newGroupIconInput.files[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    adminFormErrorEl.textContent = "Please choose an image file.";
+    newGroupIconInput.value = "";
+    return;
+  }
+  pendingGroupIcon = file;
+  newGroupIconFilenameEl.textContent = file.name;
+});
 const createGroupBtn = document.getElementById("create-group-btn");
 const adminFormErrorEl = document.getElementById("admin-form-error");
 
@@ -172,12 +194,16 @@ async function loadGroups() {
     const row = document.createElement("div");
     row.className = "member-row";
     row.innerHTML = `
+      ${g.iconUrl ? `<img src="${g.iconUrl}" alt="" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;" />` : ""}
       <div style="flex:1;">
         <div class="member-name">${escapeHtml(g.name || g.id)}</div>
         <div class="member-role">groupinfo.app/${escapeHtml(g.id)} - signs in with ${g.authMethod === "email" ? "email & password" : "phone number"}</div>
       </div>
       <button class="btn-secondary notif-toggle-btn" data-group-id="${escapeHtml(g.id)}" data-current="${g.notificationsEnabled ? "on" : "off"}" style="flex-shrink:0;">
         Notifications: ${g.notificationsEnabled ? "On" : "Off"}
+      </button>
+      <button class="btn-secondary change-icon-btn" data-group-id="${escapeHtml(g.id)}" style="flex-shrink:0;">
+        ${g.iconUrl ? "Change icon" : "Add icon"}
       </button>
     `;
     groupsListEl.appendChild(row);
@@ -198,7 +224,36 @@ async function loadGroups() {
       }
     });
   });
+
+  groupsListEl.querySelectorAll(".change-icon-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      changeGroupIconInput.dataset.groupId = btn.dataset.groupId;
+      changeGroupIconInput.click();
+    });
+  });
 }
+
+changeGroupIconInput.addEventListener("change", async () => {
+  const file = changeGroupIconInput.files[0];
+  const groupId = changeGroupIconInput.dataset.groupId;
+  changeGroupIconInput.value = "";
+  if (!file || !groupId) return;
+  if (!file.type.startsWith("image/")) {
+    alert("Please choose an image file.");
+    return;
+  }
+  try {
+    const path = `groups/${groupId}/group-icon/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, file);
+    const iconUrl = await getDownloadURL(storageRef);
+    await setDoc(doc(db, "groups", groupId), { iconUrl }, { merge: true });
+    loadGroups();
+  } catch (err) {
+    console.error(err);
+    alert("Couldn't upload that icon. Please try again.");
+  }
+});
 
 createGroupBtn.addEventListener("click", async () => {
   adminFormErrorEl.textContent = "";
@@ -221,11 +276,27 @@ createGroupBtn.addEventListener("click", async () => {
       adminFormErrorEl.textContent = "That slug is already taken - choose another.";
       return;
     }
-    await setDoc(doc(db, "groups", slug), { name, authMethod: newGroupAuthMethodEl.value, notificationsEnabled: newGroupNotificationsEl.checked });
+
+    let iconUrl = null;
+    if (pendingGroupIcon) {
+      const path = `groups/${slug}/group-icon/${Date.now()}_${pendingGroupIcon.name}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, pendingGroupIcon);
+      iconUrl = await getDownloadURL(storageRef);
+    }
+
+    await setDoc(doc(db, "groups", slug), {
+      name,
+      authMethod: newGroupAuthMethodEl.value,
+      notificationsEnabled: newGroupNotificationsEl.checked,
+      iconUrl,
+    });
     newGroupSlugEl.value = "";
     newGroupNameEl.value = "";
     newGroupAuthMethodEl.value = "phone";
     newGroupNotificationsEl.checked = false;
+    pendingGroupIcon = null;
+    newGroupIconFilenameEl.textContent = "";
     loadGroups();
   } catch (err) {
     console.error(err);

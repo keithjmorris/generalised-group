@@ -254,6 +254,7 @@ button {
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 .avatar {
   width: 40px;

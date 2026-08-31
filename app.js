@@ -87,6 +87,21 @@ const groupReady = getDoc(doc(db, "groups", GROUP_ID)).then((groupSnap) => {
   } else {
     document.getElementById("phone-step").hidden = false;
   }
+
+  // If this group has uploaded its own icon, upgrade the manifest link
+  // (already set synchronously above with the default icons) to include
+  // it - this happens well before anyone would realistically tap "Add to
+  // Home Screen", so there's no reintroduction of the timing risk that
+  // made the synchronous default-icon version necessary in the first place.
+  const iconUrl = groupSnap.exists() && groupSnap.data().iconUrl;
+  if (iconUrl) {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.href = `/api/manifest?group=${encodeURIComponent(GROUP_ID)}&icon=${encodeURIComponent(iconUrl)}`;
+    }
+    const appleIconLink = document.querySelector('link[rel="apple-touch-icon"]');
+    if (appleIconLink) appleIconLink.href = iconUrl;
+  }
 }).catch((err) => {
   // Never leave the sign-in screen blank - fall back to the phone form
   // (the more common case) rather than getting stuck with nothing shown.
